@@ -26,6 +26,7 @@ from streamlit_option_menu import option_menu
 
 # 頁面基本設定
 st.set_page_config(page_title="Streamlit", layout="wide")
+st.success("🆕 我已經更新了！")
 
 # CSS 樣式：
 st.markdown("""
