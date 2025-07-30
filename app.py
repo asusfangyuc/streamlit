@@ -22,23 +22,25 @@ from streamlit_extras.badges import badge  # GitHub / PyPI 徽章顯示
 from streamlit_extras.mention import mention  # 插入 icon 連結提示
 from streamlit_extras.stoggle import stoggle  # 可折疊提示（類似 tooltip 說明）
 
+from streamlit_option_menu import option_menu 
+
 # 頁面基本設定
 st.set_page_config(page_title="Streamlit", layout="wide")
 
-# CSS 樣式：米色底、墨綠選單、圓角排版、簡約筆記風
+# CSS 樣式：
 st.markdown("""
 <style>
-/* 🟡 背景與整體字體 */
+/* 🌼 整體字體與背景色 */
 body, .main, [data-testid="stAppViewContainer"] {
-    background-color: #fefaf1 !important;  /* 奶茶米底 */
+    background-color: #fefaf1 !important;
     color: #2e2e2e !important;
-    font-family: "Helvetica", "微軟正黑體", sans-serif;
+    font-family: "Comic Neue", "Noto Sans TC", "微軟正黑體", sans-serif;
 }
 
-/* 📚 側邊欄背景與邊框 */
+/* 📚 側邊欄樣式 */
 [data-testid="stSidebar"] {
-    background-color: #faf5e6 !important;  /* 側邊米白底 */
-    border-right: 2px solid #e0dccf;
+    background-color: #faf5e6 !important;
+    border-right: 2px solid #e7e1d2;
     padding-top: 2rem;
     box-shadow: 4px 0 8px rgba(0,0,0,0.04);
     min-width: 300px;
@@ -46,7 +48,15 @@ body, .main, [data-testid="stAppViewContainer"] {
     border-radius: 0 20px 20px 0;
 }
 
-/* 📘 logo 動畫：淡入 + 輕縮放 */
+/* ⭐ 主區塊卡片樣式 */
+section.main > div {
+    background-color: #fffdf6;
+    padding: 2rem;
+    border-radius: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+
+/* 📘 logo 淡入動畫 */
 @keyframes fadeInZoom {
     0% {opacity: 0; transform: scale(0.8);}
     100% {opacity: 1; transform: scale(1);}
@@ -55,20 +65,19 @@ body, .main, [data-testid="stAppViewContainer"] {
     animation: fadeInZoom 1.2s ease-in-out;
 }
 
-/* 📌 標題字樣式 */
+/* 🧁 主標題樣式 */
 .streamlit-heading {
     font-size: 22px !important;
     font-weight: bold;
-    color: #395b64;
+    color: #5e4b2b;
     text-align: center;
     margin-bottom: 20px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-
+# ⬅️ 側邊欄設定
 with st.sidebar:
-    # LOGO + 動畫（保留清爽風格）
     st.markdown("""
     <h1 style='text-align: center;'>
         <img src='https://streamlit.io/images/brand/streamlit-logo-primary-colormark-darktext.svg'
@@ -76,7 +85,6 @@ with st.sidebar:
     </h1>
     """, unsafe_allow_html=True)
 
-    # 文青色選單（奶茶底、墨綠 hover、藍綠 selected）
     page = option_menu(
         menu_title="",
         options=[
@@ -88,7 +96,7 @@ with st.sidebar:
             "  📈 數據分析助手", 
             "🔗 參考資料"
         ],
-        icons=[" ", " ", " ", " ", " ", " ", " "],
+        icons=[" "] * 7,
         default_index=0,
         styles={
             "container": {
@@ -96,7 +104,7 @@ with st.sidebar:
                 "background-color": "#faf5e6"
             },
             "icon": {
-                "color": "#2e4e3f",  # 墨綠 icon
+                "color": "#5e4b2b",
                 "font-size": "16px"
             },
             "nav-link": {
@@ -106,13 +114,13 @@ with st.sidebar:
                 "margin": "6px 0",
                 "padding": "0.6rem 1.2rem",
                 "border-radius": "10px",
-                "--hover-color": "#e2d37e"
+                "--hover-color": "#f4e0c9"  # hover 奶茶色
             },
             "nav-link-selected": {
-                "background-color": "#0f7fa8",  # 靛藍選中
+                "background-color": "#d3a97c",  # 焦糖棕色選中
                 "color": "white",
                 "font-weight": "bold",
-                "box-shadow": "inset 0 0 0 1px #d1e0d4"
+                "box-shadow": "inset 0 0 0 1px #f2e9de"
             }
         }
     )
