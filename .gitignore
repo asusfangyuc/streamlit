@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# Streamlit
+.streamlit/
+
+# 系統自動檔案
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 紀錄檔
+*.log
