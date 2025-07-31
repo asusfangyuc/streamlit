@@ -78,7 +78,6 @@ body, .main, [data-testid="stAppViewContainer"] {
 </style>
 """, unsafe_allow_html=True)
 
-
 with st.sidebar:
     # LOGO + 動畫（保留清爽風格）
     st.markdown("""
@@ -130,21 +129,15 @@ with st.sidebar:
     )
 
 if page == "📘 Streamlit":
-    # 頁面設定
+    # ✅ 頁面設定
     st.set_page_config(page_title="Learning Streamlit - Streamlit 教學", layout="centered")
 
-    # 加入 logo 動畫樣式
+    # ✅ 加入簡單動畫樣式（LOGO 預留）
     st.markdown("""
     <style>
     @keyframes fadeInZoom {
-        0% {
-            opacity: 0;
-            transform: scale(0.5);
-        }
-        100% {
-            opacity: 1;
-            transform: scale(1);
-        }
+        0% { opacity: 0; transform: scale(0.5); }
+        100% { opacity: 1; transform: scale(1); }
     }
     .animated-logo {
         animation: fadeInZoom 1s ease-in-out;
@@ -152,72 +145,72 @@ if page == "📘 Streamlit":
     </style>
     """, unsafe_allow_html=True)
 
-    # 頁首：僅保留文字主標題（無 logo、無 emoji）
+    # ✅ 頁首文字介紹
     st.markdown("""
-    <h1 style='text-align: center;'>Streamlit</h1>
-    <p style='text-align: center;'>Welcome to Study Time! This tab is designed to help you understand the key concepts of Streamlit.</p>
-    <p style='text-align: center;'>Please select a topic below to get started.</p>
+    <h1 style='text-align: center;'>🚀 Streamlit 教學</h1>
+    <p style='text-align: center;'>透過這個頁面，你將快速掌握 Streamlit 的基本觀念與安裝方式。</p>
+    <p style='text-align: center;'>請點選下方分頁開始學習 📘</p>
     """, unsafe_allow_html=True)
 
+    # ✅ 分頁導覽
+    tabs = st.tabs(["🗺 Overview", "📘 Streamlit 簡介", "🔧 套件安裝"])
 
-    # 建立頁籤
-    tabs = st.tabs(["🗺 Overview", "🔧 套件安裝", "📘 Streamlit 簡介"])
-
-    # 分頁 1：Overview
+    # 🔹 分頁 1：Overview
     with tabs[0]:
-        st.subheader("🗺 Overview")
+        st.subheader("🗺 Overview - 教學導覽")
         st.markdown("""
-        當你開始學習 **Streamlit** 時，可以先從以下幾個面向著手：
+        在進入實作前，先了解 **Streamlit 學習地圖**：
 
-        - 📄 **頁面結構**：如何使用 `st.title()`、`st.markdown()` 建立基本內容  
-        - 🧩 **互動元件**：加入 `st.button()`、`st.selectbox()` 等  
-        - 📊 **資料與圖表**：使用 `pandas` 顯示資料表、`matplotlib` 畫圖  
-        - 🚀 **強化功能**：透過 `streamlit-extras`、`streamlit-echarts` 提升互動性與美觀性
+        - 🧱 **頁面架構**：學會使用 `st.title()`、`st.markdown()` 設計頁面內容
+        - 🎛 **互動元件**：如 `st.button()`、`st.selectbox()` 等 UI 控制項
+        - 📈 **資料與圖表呈現**：利用 `pandas`、`matplotlib` 或 `plotly` 顯示資料與可視化
+        - ✨ **強化功能**：運用 `streamlit-extras`、`streamlit-echarts` 增加互動性與美觀性
+
+        📌 建議你依照順序閱讀分頁，從「簡介」👉「安裝」👉「實作」。
         """)
 
-    # 分頁 2：套件說明
+    # 🔹 分頁 2：Streamlit 簡介
     with tabs[1]:
-        st.subheader("🔧 套件安裝與用途說明")
-        st.markdown("""
-        | 套件 | 用途說明 |
-        |------|----------|
-        | `streamlit` | 建立互動式網頁與介面元件 |
-        | `streamlit-extras` | 額外元件（如徽章、連結、空白區）增強功能 |
-        | `pandas` | 資料處理與表格顯示 |
-        | `numpy` | 數值陣列與隨機資料模擬 |
-        | `matplotlib` | 基本圖表繪製（長條圖、折線圖等） |
-        | `openpyxl` | 支援讀取 Excel（.xlsx）檔案 |
-        """)
-
-        st.code("""
-pip install streamlit
-pip install streamlit-extras
-pip install pandas
-pip install numpy
-pip install matplotlib
-pip install seaborn
-pip install streamlit-echarts
-pip install openpyxl
-        """, language='bash')
-
-    # 分頁 3：簡介
-    with tabs[2]:
         st.subheader("📘 什麼是 Streamlit？")
         st.markdown("""
-        Streamlit 是一個讓你用 Python 快速建立 Web 應用程式的工具，適合資料科學、AI 展示、互動式教學等用途。
+        Streamlit 是一個能讓你用 **純 Python 語法快速建立 Web 應用程式** 的工具。  
+        適用於：資料分析、AI Demo、即時互動式工具製作等。
 
-        🔧 **執行方式：**
+        ### 🔧 執行方式：
         ```bash
         streamlit run app.py
         ```
 
-        🔎 **核心特點：**
-        - 快速部署  
-        - 支援多種圖表  
-        - 支援互動元件  
-        - 不需寫 HTML 或 JS  
+        ### 🚀 Streamlit 的優點：
+        - 不用寫 HTML / JS，也能做網頁
+        - 元件簡單好上手（如 `st.button()`）
+        - 支援互動與圖表
+        - 快速部署，適合展示 AI / 數據成果
 
-        🌐 官方展示網站：[https://extras.streamlit.app](https://extras.streamlit.app)
+        🌐 [Streamlit 官方展示](https://extras.streamlit.app)
+        """)
+
+    # 🔹 分頁 3：套件安裝說明
+    with tabs[2]:
+        st.subheader("🔧 套件安裝與用途說明")
+        st.markdown("""
+        以下是我們常用到的套件與對應功能：
+
+        | 套件名稱 | 功能說明 |
+        |-----------|-----------|
+        | `streamlit` | 建立網頁與 UI 元件（核心套件） |
+        | `streamlit-extras` | 額外元件，如徽章、連結、排版輔助等 |
+        | `pandas` | 資料整理與表格顯示 |
+        | `numpy` | 數值運算、模擬數據 |
+        | `matplotlib` | 基本圖表（長條圖、折線圖等） |
+        | `seaborn` | 高階統計圖表視覺化 |
+        | `openpyxl` | Excel（.xlsx）檔案讀寫 |
+        | `streamlit-echarts` | 使用 ECharts 繪製互動圖表 |
+
+        ### 📦 安裝指令（建議一併安裝）：
+        ```bash
+        pip install streamlit streamlit-extras pandas numpy matplotlib seaborn streamlit-echarts openpyxl
+        ```
         """)
 
 elif page == "🧮 功能介紹":
@@ -707,21 +700,22 @@ elif chart_type == '散點圖':
 
 elif page == "📊 圖表介紹":
     st.header("📊 圖表展示")
-    # 最簡明欄位結構
+
+    # 熱門度依序排序的圖表資料
     chart_data = pd.DataFrame([
-        ["漸層圖", "matplotlib", "imshow()"],
-        ["熱力圖", "seaborn", "heatmap()"],
-        ["儀表圖", "plotly", "Indicator(gauge)"],
         ["折線圖", "plotly", "line()"],
         ["長條圖", "plotly", "bar()"],
         ["圓餅圖", "plotly", "Pie()"],
+        ["熱力圖", "seaborn", "heatmap()"],
+        ["雷達圖", "plotly", "Scatterpolar()"],
         ["環形圖", "plotly", "Pie(hole=0.5)"],
         ["面積圖", "plotly", "area()"],
         ["瀑布圖", "plotly", "Waterfall()"],
-        ["雷達圖", "plotly", "Scatterpolar()"],
-        ["漏斗圖", "plotly", "Funnel()"],
+        ["儀表圖", "plotly", "Indicator(gauge)"],
         ["氣泡圖", "plotly", "scatter(size=...)"],
-        ["地圖", "plotly", "scatter_mapbox()"]
+        ["地圖", "plotly", "scatter_mapbox()"],
+        ["漏斗圖", "plotly", "Funnel()"],
+        ["漸層圖", "matplotlib", "imshow()"]
     ], columns=["圖表名稱", "使用套件", "函數"])
 
 
@@ -1147,8 +1141,7 @@ openai.api_base = "https://openrouter.ai/api/v1"
 response = openai.ChatCompletion.create(
     model="deepseek/deepseek-r1:free",
     messages=[{"role": "user", "content": prompt}]
-)''', language="python")
-        
+)''', language="python")        
 elif page == "🔗 參考資料":
     st.header("🎨 進階排版與功能加強（streamlit-extras 功能介紹）")
 
@@ -1190,3 +1183,4 @@ mention(label="查看 Streamlit 官方網站", icon="🌐", url="https://streaml
 # --- 頁尾 ---
 st.markdown("---")
 st.markdown("<div style='text-align:center'>© 2025 Streamlit 教學頁面</div>", unsafe_allow_html=True)
+
