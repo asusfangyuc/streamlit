@@ -212,7 +212,6 @@ if page == "📘 Streamlit":
         pip install streamlit streamlit-extras pandas numpy matplotlib seaborn streamlit-echarts openpyxl
         ```
         """)
-
 elif page == "🧮 功能介紹":
     st.header("🧮 功能介紹")
     chart_data = pd.DataFrame([
@@ -697,7 +696,6 @@ elif chart_type == '柱狀圖':
 elif chart_type == '散點圖':
     st.scatter_chart(df_chart)""", language="python")
         st.write("")  # 插入一個空行
-
 elif page == "📊 圖表介紹":
     st.header("📊 圖表展示")
 
@@ -906,7 +904,6 @@ elif page == "📊 圖表介紹":
             st.map(map_df)
             with st.expander("🔧 Source Code"):
                 st.code("st.map(map_df)")
-    
 elif page == "  🕴 GAI 新聞摘要":
     st.header("  🕴 GAI 新聞摘要")
     # 中文字體支援與畫面設定
@@ -1067,82 +1064,134 @@ elif page == "  🕴 GAI 新聞摘要":
             except Exception as e:
                 st.error(f"回覆失敗：{e}")
 elif page == "  📈 數據分析助手":
-    # ✅ 直接寫入 OpenRouter API 設定
-    openai.api_key = "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"  # ← 請換成你自己的 key
-    openai.api_base = "https://openrouter.ai/api/v1"
+    import os
+    import streamlit as st
+    import pandas as pd
+    import plotly.express as px
+    from openai import OpenAI
+
+    # 讀取 OpenRouter 金鑰（優先 st.secrets，其次環境變數）
+    OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+    if not OPENROUTER_API_KEY:
+        st.error("找不到 OPENROUTER_API_KEY，請在 .streamlit/secrets.toml 或環境變數設定你的 OpenRouter 金鑰。")
+        st.stop()
+
+    # OpenRouter Client（HTTP header 僅使用 ASCII，避免 'ascii' codec 錯誤）
+    client = OpenAI(
+        api_key=OPENROUTER_API_KEY,
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={
+            "HTTP-Referer": "http://localhost",   # 若你有對外網址，改成你的網址
+            "X-Title": "ASUS-Data-Assistant"      # 英數/破折號，避免非 ASCII
+        }
+    )
     openai_model = "deepseek/deepseek-r1:free"
 
     st.header("📈 數據分析助手")
     uploaded_file = st.file_uploader("請上傳一個 CSV 檔案", type=["csv"])
 
     if uploaded_file:
-        df = pd.read_csv(uploaded_file)
+        # 讀檔（優先 UTF-8，失敗再退回預設）
+        try:
+            df = pd.read_csv(uploaded_file, encoding="utf-8")
+        except Exception:
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file)
+
         st.subheader("🔍 數據預覽")
         st.dataframe(df.head())
 
         st.subheader("📈 數據統計摘要")
-        st.write(df.describe())
-        
+        try:
+            st.write(df.describe(include="all"))
+        except Exception:
+            st.write(df.describe())
+
         st.subheader("📊 圖表視覺化")
-
         # 自動判斷欄位類型
-        all_columns = df.columns.tolist()
-        numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-        non_numeric_columns = df.select_dtypes(exclude=['int64', 'float64']).columns.tolist()
+        numeric_columns = df.select_dtypes(include="number").columns.tolist()
+        non_numeric_columns = df.select_dtypes(exclude="number").columns.tolist()
 
-        if len(numeric_columns) >= 1 and len(non_numeric_columns) >= 1:
-            x_axis = st.selectbox("選擇 X 軸欄位（分類）", non_numeric_columns)
-            y_axis = st.selectbox("選擇 Y 軸欄位（數值）", numeric_columns)
+        if numeric_columns and non_numeric_columns:
+            x_axis = st.selectbox("選擇 X 軸欄位（分類）", non_numeric_columns, key="da_x")
+            y_axis = st.selectbox("選擇 Y 軸欄位（數值）", numeric_columns, key="da_y")
+            chart_type = st.radio("選擇圖表類型", ["Bar Chart", "Line Chart"], horizontal=True, key="da_chart")
 
-            chart_type = st.radio("選擇圖表類型", ["Bar Chart", "Line Chart"], horizontal=True)
-
-            import plotly.express as px
-            fig = None
             if chart_type == "Bar Chart":
                 fig = px.bar(df, x=x_axis, y=y_axis, title=f"{y_axis} by {x_axis}")
-            elif chart_type == "Line Chart":
+            else:
                 fig = px.line(df, x=x_axis, y=y_axis, title=f"{y_axis} by {x_axis}")
 
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("需同時包含分類欄位（如文字）與數值欄位，才能建立圖表。")
-        
-        st.subheader("🧠 使用 GPT 分析")
-        user_query = st.text_area("請輸入你的分析指令（如：請幫我分析客戶評論、哪個產品銷售量最好?）")
 
-        if st.button("送出給 GPT 分析"):
+        st.subheader("🧠 使用 GPT 分析")
+        user_query = st.text_area("請輸入你的分析指令（如：請幫我分析客戶評論、哪個產品銷售量最好?）", key="da_query")
+
+        if st.button("送出給 GPT 分析", key="da_btn"):
             with st.spinner("分析中..."):
-                prompt = f"""
-你是一位數據分析師，請根據以下的 DataFrame（以 markdown 格式表示）來回答用戶的問題。
+                df_md = df.head(10).astype(str).to_markdown(index=False)
+                prompt = f"""你是一位數據分析師，請根據以下的 DataFrame（以 markdown 表示）回答問題。
 
 Data:
-{df.head(10).to_markdown()}
+{df_md}
 
 問題：
 {user_query}
 
-請以簡潔易懂的方式回覆。
-"""
+請以簡潔易懂的方式回覆。"""
+
                 try:
-                    response = openai.ChatCompletion.create(
+                    resp = client.chat.completions.create(
                         model=openai_model,
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.5
                     )
-                    result = response["choices"][0]["message"]["content"]
+                    result = resp.choices[0].message.content
                     st.markdown("#### 🧾 分析結果")
                     st.write(result)
                 except Exception as e:
                     st.error(f"發生錯誤：{e}")
-
-    with st.expander("🔧 :red[Source Code]"):
-        st.code('''openai.api_key = "sk-你的OpenRouter金鑰"
-openai.api_base = "https://openrouter.ai/api/v1"
-response = openai.ChatCompletion.create(
-    model="deepseek/deepseek-r1:free",
-    messages=[{"role": "user", "content": prompt}]
-)''', language="python")        
+    
 elif page == "🔗 參考資料":
+    st.header("🎨 進階排版與功能加強（streamlit-extras 功能介紹）")
+
+    st.markdown("""
+    `streamlit-extras` 提供許多輔助元件，讓頁面更有彈性、更好用。
+    安裝方式：
+    ```bash
+    pip install streamlit-extras
+    ```
+    """)
+
+    st.subheader("1. 增加垂直間距")
+    st.write("上方段落")
+    add_vertical_space(2)
+    st.write("下方段落（中間有空白）")
+
+    st.subheader("2. 顯示徽章 badge")
+    badge(type="github", name="arnaudmiribel/streamlit-extras")
+    badge(type="pypi", name="streamlit-extras")
+    badge(type="twitter", name="streamlit")
+    badge(type="buymeacoffee", name="arnaudmiribel")
+
+    st.subheader("3. 快速連結提示 mention")
+    mention(label="查看 Streamlit 官方網站", icon="🌐", url="https://streamlit.io")
+    with st.expander("🔧 :red[Source Code]"):
+        st.code("""
+st.write("上方段落")
+add_vertical_space(2)
+st.write("下方段落（中間有空白）")
+
+badge(type="github", name="arnaudmiribel/streamlit-extras")
+badge(type="pypi", name="streamlit-extras")
+badge(type="twitter", name="streamlit")
+badge(type="buymeacoffee", name="arnaudmiribel")
+
+mention(label="查看 Streamlit 官方網站", icon="🌐", url="https://streamlit.io")
+        """, language="python")    
+
     st.header("🎨 進階排版與功能加強（streamlit-extras 功能介紹）")
 
     st.markdown("""

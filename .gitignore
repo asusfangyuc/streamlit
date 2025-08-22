@@ -16,3 +16,7 @@ desktop.ini
 
 # 紀錄檔
 *.log
+
+.streamlit/secrets.toml
+.env
+desktop.ini
