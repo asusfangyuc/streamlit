@@ -906,13 +906,11 @@ elif page == "📊 圖表介紹":
             with st.expander("🔧 Source Code"):
                 st.code("st.map(map_df)")
 elif page == "  🕴 GAI 新聞摘要":
-        # ---------- Streamlit 頁面設定要最先呼叫 ----------
-    st.set_page_config(page_title="GAI 新聞摘要", layout="wide")
+    # 這頁面不再呼叫 set_page_config；請確保整個 app 只在檔案頂端呼叫一次。
 
-    # ---------- 中文字體（多備幾個常見字體名稱以避免亂碼） ----------
+    # 中文字體（避免亂碼）
     plt.rcParams["font.sans-serif"] = ["Microsoft JhengHei", "Noto Sans CJK TC", "PingFang TC", "Heiti TC", "Arial Unicode MS"]
     plt.rcParams["axes.unicode_minus"] = False
-    # sns.set_theme()  # 若有要用 seaborn 再開啟
 
     # ---------- OpenRouter API 初始化（用 secrets.toml） ----------
     OPENROUTER_API_KEY  = st.secrets.get("OPENROUTER_API_KEY")
@@ -924,7 +922,7 @@ elif page == "  🕴 GAI 新聞摘要":
 
     default_headers = {}
     app_url  = st.secrets.get("APP_URL")
-    app_name = st.secrets.get("APP_NAME")
+    app_name = st.secrets.get("APP_NAME")  # 只用 ASCII，避免 'ascii' codec 錯誤
     if app_url:
         default_headers["HTTP-Referer"] = app_url
     if app_name:
@@ -936,11 +934,14 @@ elif page == "  🕴 GAI 新聞摘要":
         default_headers=default_headers or None
     )
 
-    # ---------- 爬蟲輔助：共用 Session 與標頭 ----------
-    SESSION = requests.Session()
-    SESSION.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    # ---------- 爬蟲輔助（避免與 DataFrame 撞名） ----------
+    REQUEST_TIMEOUT = 12
+    HTTP_SESSION = requests.Session()
+    HTTP_SESSION.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+        )
     })
 
     # =========================================================
@@ -975,22 +976,26 @@ elif page == "  🕴 GAI 新聞摘要":
     # =========================================================
     @st.cache_data(show_spinner=False, ttl=600)
     def fetch_news_content(url: str, content_tags=None) -> str:
-        """抓取新聞文章前 500 字做分析；預設會把多數 <p>/<div>/<span> 的文字合併"""
+        """抓取新聞文章前 500 字做分析；預設合併 <article>/<p>/<div>/<span> 的文字。"""
         content_tags = content_tags or ["article", "p", "div", "span"]
         try:
-            res = SESSION.get(url, timeout=12)
-            res.encoding = "utf-8"
-            soup = BeautifulSoup(res.text, "html.parser")
-            article_content = []
-            for tag in content_tags:
-                for el in soup.find_all(tag):
-                    txt = (el.get_text() or "").strip()
-                    if txt:
-                        article_content.append(txt)
-            merged = "\n".join(article_content).strip()
-            return merged[:500] if merged else "無法抓取文章內容"
-        except Exception:
-            return "文章內容抓取失敗"
+            res = HTTP_SESSION.get(url, timeout=REQUEST_TIMEOUT)
+        except Exception as e:
+            return f"文章內容抓取失敗：{e}"
+
+        if res.status_code != 200:
+            return f"文章內容抓取失敗：HTTP {res.status_code}"
+
+        res.encoding = "utf-8"
+        soup = BeautifulSoup(res.text, "html.parser")
+        article_content = []
+        for tag in content_tags:
+            for el in soup.find_all(tag):
+                txt = (el.get_text() or "").strip()
+                if txt:
+                    article_content.append(txt)
+        merged = "\n".join(article_content).strip()
+        return merged[:500] if merged else "無法抓取文章內容"
 
     def _base_of(url: str) -> str:
         p = urlparse(url)
@@ -998,33 +1003,39 @@ elif page == "  🕴 GAI 新聞摘要":
 
     @st.cache_data(show_spinner=False, ttl=300)
     def fetch_headlines(list_url: str, site_name: str, tag: str, keyword: str = "華碩"):
-        """從網站列表頁抓取含關鍵字的標題、連結，再抓內文"""
-        headlines = []
+        """從網站列表頁抓取含關鍵字的標題、連結，再抓內文；失敗回傳空陣列避免整個 app 掛掉。"""
         try:
-            res = SESSION.get(list_url, timeout=12)
-            res.encoding = "utf-8"
-            soup = BeautifulSoup(res.text, "html.parser")
-            headline_elements = soup.find_all(tag)
-            base = _base_of(list_url)
-
-            for h in headline_elements:
-                title = (h.get_text() or "").strip()
-                if not title or keyword not in title:
-                    continue
-                a = h.find("a", href=True)
-                if not a:
-                    continue
-                href = a["href"].strip()
-                news_url = urljoin(base, href)
-                content = fetch_news_content(news_url)
-                headlines.append({
-                    "新聞媒體": site_name,
-                    "新聞標題": title,
-                    "新聞內容": content,
-                    "新聞網址": news_url
-                })
+            res = HTTP_SESSION.get(list_url, timeout=REQUEST_TIMEOUT)
         except Exception as e:
-            st.error(f"{site_name} 抓取錯誤：{e}")
+            st.warning(f"{site_name} 連線失敗：{e}")
+            return []
+
+        if res.status_code != 200:
+            st.warning(f"{site_name} 回應碼 {res.status_code}（可能擋爬或需 JS）。")
+            return []
+
+        res.encoding = "utf-8"
+        soup = BeautifulSoup(res.text, "html.parser")
+        headline_elements = soup.find_all(tag)
+        base = _base_of(list_url)
+
+        headlines = []
+        for h in headline_elements:
+            title = (h.get_text() or "").strip()
+            if not title or keyword not in title:
+                continue
+            a = h.find("a", href=True)
+            if not a:
+                continue
+            href = a["href"].strip()
+            news_url = urljoin(base, href)
+            content = fetch_news_content(news_url)
+            headlines.append({
+                "新聞媒體": site_name,
+                "新聞標題": title,
+                "新聞內容": content,
+                "新聞網址": news_url
+            })
         return headlines
 
     # =========================================================
@@ -1056,19 +1067,25 @@ elif page == "  🕴 GAI 新聞摘要":
                 site = platforms[site_name]
                 articles = fetch_headlines(site["url"], site_name, site["tag"], keyword)
                 for art in articles:
-                    topic = classify_topic(art["新聞標題"], art["新聞內容"])
+                    topic = classify_topic(art.get("新聞標題", ""), art.get("新聞內容", ""))
                     art["議題"] = topic
                     all_results.append(art)
                     time.sleep(0.8)  # 適度節流，避免 LLM 請求過快
                 progress.progress(i / total)
 
-            if not all_results:
+            # 安全重排欄位，缺的自動補 NaN，避免 KeyError
+            expected_cols = ["議題", "新聞媒體", "新聞標題", "新聞內容", "新聞網址"]
+            df = pd.DataFrame(all_results).reindex(columns=expected_cols)
+
+            if df.empty or df["新聞標題"].isna().all():
                 st.warning("沒有抓到符合關鍵字的新聞，請更換關鍵字或平台重試。")
             else:
-                df = pd.DataFrame(all_results)
-                df = df[["議題", "新聞媒體", "新聞標題", "新聞內容", "新聞網址"]]
+                missing = [c for c in expected_cols if c not in df.columns or df[c].isna().all()]
+                if missing:
+                    st.info(f"部分欄位缺少資料：{', '.join(missing)}。")
                 st.session_state["news_df"] = df
-                st.session_state["topics"] = sorted(df["議題"].unique().tolist())
+                topics = [t for t in df["議題"].dropna().unique().tolist() if t]
+                st.session_state["topics"] = sorted(topics) if topics else ["未分類"]
                 st.success("✅ 抓取完成！下方可進行篩選與分析。")
 
     # =========================================================
@@ -1078,7 +1095,7 @@ elif page == "  🕴 GAI 新聞摘要":
         df = st.session_state["news_df"]
         unique_topics = st.session_state["topics"]
 
-        selected_topics = st.multiselect("🧠 請選擇篩選的議題（可複選）", unique_topics, default=unique_topics)
+        selected_topics = st.multiselect("🧠 請選擇篩選的議題（可複選）", unique_topics, default=unique_topics, key="topic_filter")
         filtered_df = df[df["議題"].isin(selected_topics)].copy()
 
         st.dataframe(filtered_df, use_container_width=True)
@@ -1089,27 +1106,23 @@ elif page == "  🕴 GAI 新聞摘要":
             st.info("目前篩選條件下沒有資料。")
         else:
             topic_counts = filtered_df["議題"].value_counts()
-            fig, ax = plt.subplots(figsize=(1.5, 0.5), dpi=600)  # 更小但高畫質
+            fig, ax = plt.subplots(figsize=(3, 1), dpi=300)  # 小尺寸高 DPI
             bars = ax.bar(topic_counts.index, topic_counts.values)
-
             for bar in bars:
                 h = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width() / 2, h, f"{int(h)}",
-                        ha="center", va="bottom", fontsize=4)
-
-            ax.set_ylabel("新聞數量", fontsize=4)
-            plt.xticks(rotation=0, fontsize=4)
-            plt.yticks(fontsize=4)
-
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight", dpi=600)
-            st.image(buf, use_container_width=True)
+                        ha="center", va="bottom", fontsize=8)
+            ax.set_ylabel("新聞數量", fontsize=8)
+            ax.tick_params(axis="x", labelsize=8)
+            ax.tick_params(axis="y", labelsize=8)
+            st.pyplot(fig, use_container_width=True, clear_figure=True)
+            plt.close(fig)
 
         # 💬 使用者提問（依當前篩選結果生成脈絡）
         st.markdown("### 💬 對這些新聞內容發問")
-        user_question = st.text_area("請輸入你的問題（例如：這些新聞中有哪些未來趨勢？）")
+        user_question = st.text_area("請輸入你的問題（例如：這些新聞中有哪些未來趨勢？）", key="qa_question")
 
-        if st.button("送出提問") and user_question:
+        if st.button("送出提問", key="qa_submit") and user_question:
             if filtered_df.empty:
                 st.warning("目前沒有可供分析的新聞內容，請先進行搜尋或調整篩選條件。")
             else:
