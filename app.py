@@ -43,7 +43,7 @@ st.markdown("""
 <style>
 /* 🟡 背景與整體字體 */
 body, .main, [data-testid="stAppViewContainer"] {
-    background-color: #faf5e6 !important;  /* 奶茶米底 */
+    background-color: #faf5e6 !important;    /* 米色背景 */
     color: #2e2e2e !important;
     font-family: "Helvetica", "微軟正黑體", sans-serif;
 }
