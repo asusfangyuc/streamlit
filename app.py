@@ -41,40 +41,72 @@ st.set_page_config(page_title="Streamlit", layout="wide")
 # CSS 樣式：米色底、墨綠選單、圓角排版、簡約筆記風
 st.markdown("""
 <style>
-/* 🟡 背景與整體字體 */
-body, .main, [data-testid="stAppViewContainer"] {
-    background-color: #faf5e6 !important;    /* 米色背景 */
-    color: #2e2e2e !important;
-    font-family: "Helvetica", "微軟正黑體", sans-serif;
+:root{
+  --milk-bg:#faf5e6;         /* 主背景：奶茶米底 */
+  --milk-side:#faf5e6;       /* 側欄底色 */
+  --milk-border:#e0dccf;     /* 邊框色 */
+  --milk-accent:#395b64;     /* 主標題/按鈕色 */
 }
 
-/* 📚 側邊欄背景與邊框 */
-[data-testid="stSidebar"] {
-    background-color: #faf5e6 !important;  /* 側邊米白底 */
-    border-right: 2px solid #e0dccf;
-    padding-top: 2rem;
-    box-shadow: 4px 0 8px rgba(0,0,0,0.04);
-    min-width: 300px;
-    max-width: 340px;
-    border-radius: 0 20px 20px 0;
+/* 🟡 全域背景與字體 */
+html, body, .stApp, [data-testid="stAppViewContainer"]{
+  background-color: var(--milk-bg) !important;
+  color:#2e2e2e !important;
+  font-family: "Helvetica", "微軟正黑體", sans-serif;
+}
+
+/* 🧱 讓 app header 同色，移除陰影；(無法控制雲端白色工具列) */
+[data-testid="stHeader"]{
+  background: var(--milk-bg) !important;
+  box-shadow: none !important;
+}
+
+/* 🔝 縮小頂部空白（不同版本都涵蓋） */
+.appview-container .main .block-container,
+[data-testid="stAppViewContainer"] .main .block-container{
+  padding-top: .75rem;
+}
+
+/* 📚 側欄 */
+[data-testid="stSidebar"]{
+  background-color: var(--milk-side) !important;
+  border-right: 2px solid var(--milk-border);
+  padding-top: 2rem;
+  box-shadow: 4px 0 8px rgba(0,0,0,0.04);
+  min-width: 300px; max-width: 340px;
+  border-radius: 0 20px 20px 0;
 }
 
 /* 📘 logo 動畫：淡入 + 輕縮放 */
-@keyframes fadeInZoom {
-    0% {opacity: 0; transform: scale(0.8);}
-    100% {opacity: 1; transform: scale(1);}
-}
-.animated-logo {
-    animation: fadeInZoom 1.2s ease-in-out;
+@keyframes fadeInZoom { 0%{opacity:0;transform:scale(.8);} 100%{opacity:1;transform:scale(1);} }
+.animated-logo{ animation: fadeInZoom 1.2s ease-in-out; }
+
+/* 📌 自訂標題樣式 */
+.streamlit-heading{
+  font-size: 22px !important;
+  font-weight: 700;
+  color: var(--milk-accent);
+  text-align: center;
+  margin-bottom: 20px;
 }
 
-/* 📌 標題字樣式 */
-.streamlit-heading {
-    font-size: 22px !important;
-    font-weight: bold;
-    color: #395b64;
-    text-align: center;
-    margin-bottom: 20px;
+/* 🔘 按鈕（可依喜好微調） */
+.stButton > button{
+  background: var(--milk-accent);
+  color:#fff; border:none; border-radius:10px;
+  padding:.5rem 1rem;
+}
+.stButton > button:hover{ opacity:.95; transform: translateY(-1px); }
+
+/* 🏷️ Multiselect Tag 樣式（膠囊） */
+[data-baseweb="tag"]{
+  background:#fff7e1; color:#7a5b2e;
+  border:1px solid var(--milk-border);
+}
+
+/* 🧾 資料表表頭淡底色（st.dataframe）*/
+.stDataFrame div[role="columnheader"]{
+  background:#f3eadb !important;
 }
 </style>
 """, unsafe_allow_html=True)
