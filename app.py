@@ -1,38 +1,39 @@
-# 🌐 核心：Streamlit 主框架
-import streamlit as st  # 建立網頁介面與互動元件
-import openai
+# 🌐 Streamlit 與 OpenAI（OpenRouter）
+import streamlit as st
+from openai import OpenAI        # 使用新版 OpenAI Client（透過 OpenRouter）
+# import openai  # 目前未使用，可移除
 
-# 📆 日期與時間處理
-from datetime import datetime  # 取得目前時間，用於頁尾時間戳
-import datetime
+# 📆 日期與時間
+from datetime import datetime
+import datetime as dt
 import time
 
-# 📊 資料處理與分析
-import pandas as pd  # 表格處理與資料分析
-import numpy as np  # 數值模擬、陣列操作
+# 📊 資料處理
+import pandas as pd
+import numpy as np
 
-# 📈 靜態圖表（Matplotlib / Seaborn）
-import matplotlib.pyplot as plt  # 長條圖、折線圖、圓餅圖等
-import matplotlib  # 字體與顯示細節設定
-import seaborn as sns  # 熱力圖與統計視覺化
+# 📈 視覺化（Matplotlib / Seaborn）
+import matplotlib.pyplot as plt
+import matplotlib
+import seaborn as sns
 
 # 📉 互動式圖表（Plotly / ECharts）
-import plotly.express as px  # 快速建立互動圖表（bar, scatter, line 等）
-import plotly.graph_objects as go  # 進階圖表自訂控制（若有需求再用）
-from streamlit_echarts import st_echarts  # ECharts 圖表支援（如雷達圖、環形圖）
+import plotly.express as px
+import plotly.graph_objects as go
+from streamlit_echarts import st_echarts
 
-# 🔧 Streamlit 擴充元件（UI 強化工具）
-from streamlit_option_menu import option_menu  # 側邊欄選單元件（導航用）
-from streamlit_extras.add_vertical_space import add_vertical_space  # 垂直留白
-from streamlit_extras.badges import badge  # GitHub / PyPI 徽章顯示
-from streamlit_extras.mention import mention  # 插入 icon 連結提示
-from streamlit_extras.stoggle import stoggle  # 可折疊提示（類似 tooltip 說明）
+# 🔧 Streamlit 擴充（若未用到可後續移除）
+from streamlit_option_menu import option_menu
+from streamlit_extras.add_vertical_space import add_vertical_space
+from streamlit_extras.badges import badge
+from streamlit_extras.mention import mention
+from streamlit_extras.stoggle import stoggle
 
-#新聞摘要
+# 📰 爬蟲與工具
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse, urljoin
 import io
-from openai import OpenAI
 
 # 頁面基本設定
 st.set_page_config(page_title="Streamlit", layout="wide")
@@ -905,193 +906,279 @@ elif page == "📊 圖表介紹":
             with st.expander("🔧 Source Code"):
                 st.code("st.map(map_df)")
 elif page == "  🕴 GAI 新聞摘要":
-    st.header("  🕴 GAI 新聞摘要")
-    # 中文字體支援與畫面設定
-    plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
-    plt.rcParams['axes.unicode_minus'] = False
-    st.set_page_config(layout="wide")
+        # ---------- Streamlit 頁面設定要最先呼叫 ----------
+    st.set_page_config(page_title="GAI 新聞摘要", layout="wide")
 
-# OpenRouter API 初始化
+    # ---------- 中文字體（多備幾個常見字體名稱以避免亂碼） ----------
+    plt.rcParams["font.sans-serif"] = ["Microsoft JhengHei", "Noto Sans CJK TC", "PingFang TC", "Heiti TC", "Arial Unicode MS"]
+    plt.rcParams["axes.unicode_minus"] = False
+    # sns.set_theme()  # 若有要用 seaborn 再開啟
+
+    # ---------- OpenRouter API 初始化（用 secrets.toml） ----------
+    OPENROUTER_API_KEY  = st.secrets.get("OPENROUTER_API_KEY")
+    OPENROUTER_BASE_URL = st.secrets.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+
+    if not OPENROUTER_API_KEY:
+        st.error("找不到 OPENROUTER_API_KEY，請在 `.streamlit/secrets.toml` 或 Streamlit Cloud 的 Secrets 面板設定後再執行。")
+        st.stop()
+
+    default_headers = {}
+    app_url  = st.secrets.get("APP_URL")
+    app_name = st.secrets.get("APP_NAME")
+    if app_url:
+        default_headers["HTTP-Referer"] = app_url
+    if app_name:
+        default_headers["X-Title"] = app_name
+
     client = OpenAI(
-        api_key="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",
-        base_url="https://openrouter.ai/api/v1"
+        api_key=OPENROUTER_API_KEY,
+        base_url=OPENROUTER_BASE_URL,
+        default_headers=default_headers or None
     )
 
-# 議題分類函式
-    def classify_topic(title, content):
+    # ---------- 爬蟲輔助：共用 Session 與標頭 ----------
+    SESSION = requests.Session()
+    SESSION.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    })
+
+    # =========================================================
+    # 🧠 議題分類（LLM）
+    # =========================================================
+    def classify_topic(title: str, content: str) -> str:
+        """呼叫 OpenRouter（deepseek-chat）將標題與內文分類為單一議題"""
         try:
-            response = client.chat.completions.create(
+            resp = client.chat.completions.create(
                 model="deepseek/deepseek-chat",
                 messages=[
-                    {"role": "system", "content": "你是一位新聞議題分類專家，請根據新聞標題與內文，回傳最合適的一個議題分類，例如：科技、財經、政治、產業趨勢、國際、人物報導、消費、AI、新創、教育、健康等。只回傳分類名稱，不需要解釋。"},
-                    {"role": "user", "content": f"標題：{title}\n內文：{content[:500]}"}
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是一位新聞議題分類專家，請根據新聞標題與內文，回傳最合適的一個議題分類，"
+                            "例如：科技、財經、政治、產業趨勢、國際、人物報導、消費、AI、新創、教育、健康等。"
+                            "只回傳分類名稱，不需要解釋。"
+                        )
+                    },
+                    {"role": "user", "content": f"標題：{title}\n內文：{(content or '')[:500]}"},
                 ],
                 temperature=0.3,
                 max_tokens=20
             )
-            return response.choices[0].message.content.strip()
+            topic = (resp.choices[0].message.content or "").strip()
+            return topic if topic else "未分類"
         except Exception as e:
             return f"分類失敗: {e}"
 
-# 抓取新聞內容
-    def fetch_news_content(url, site_name, content_tags=['p', 'div', 'span']):
+    # =========================================================
+    # 📰 抓取新聞內容與標題
+    # =========================================================
+    @st.cache_data(show_spinner=False, ttl=600)
+    def fetch_news_content(url: str, content_tags=None) -> str:
+        """抓取新聞文章前 500 字做分析；預設會把多數 <p>/<div>/<span> 的文字合併"""
+        content_tags = content_tags or ["article", "p", "div", "span"]
         try:
-            response = requests.get(url)
-            response.encoding = 'utf-8'
-            soup = BeautifulSoup(response.text, 'html.parser')
-            article_content = ""
+            res = SESSION.get(url, timeout=12)
+            res.encoding = "utf-8"
+            soup = BeautifulSoup(res.text, "html.parser")
+            article_content = []
             for tag in content_tags:
-                paragraphs = soup.find_all(tag)
-                for paragraph in paragraphs:
-                    article_content += paragraph.get_text().strip() + '\n'
-            return article_content[:500] if article_content else "無法抓取文章內容"
-        except:
+                for el in soup.find_all(tag):
+                    txt = (el.get_text() or "").strip()
+                    if txt:
+                        article_content.append(txt)
+            merged = "\n".join(article_content).strip()
+            return merged[:500] if merged else "無法抓取文章內容"
+        except Exception:
             return "文章內容抓取失敗"
 
-# 抓取新聞標題與內容
-    def fetch_headlines(url, site_name, tag, keyword='華碩'):
+    def _base_of(url: str) -> str:
+        p = urlparse(url)
+        return f"{p.scheme}://{p.netloc}"
+
+    @st.cache_data(show_spinner=False, ttl=300)
+    def fetch_headlines(list_url: str, site_name: str, tag: str, keyword: str = "華碩"):
+        """從網站列表頁抓取含關鍵字的標題、連結，再抓內文"""
         headlines = []
         try:
-            response = requests.get(url)
-            response.encoding = 'utf-8'
-            soup = BeautifulSoup(response.text, 'html.parser')
+            res = SESSION.get(list_url, timeout=12)
+            res.encoding = "utf-8"
+            soup = BeautifulSoup(res.text, "html.parser")
             headline_elements = soup.find_all(tag)
+            base = _base_of(list_url)
 
-            for headline in headline_elements:
-                title = headline.get_text().strip()
-                if keyword in title:
-                    link_tag = headline.find('a', href=True)
-                    if link_tag:
-                        href = link_tag['href']
-                        news_url = href if href.startswith('http') else f"https://news.ltn.com.tw{href}"
-                        content = fetch_news_content(news_url, site_name)
-                        headlines.append({
-                            '新聞媒體': site_name,
-                            '新聞標題': title,
-                            '新聞內容': content,
-                            '新聞網址': news_url
-                        })
+            for h in headline_elements:
+                title = (h.get_text() or "").strip()
+                if not title or keyword not in title:
+                    continue
+                a = h.find("a", href=True)
+                if not a:
+                    continue
+                href = a["href"].strip()
+                news_url = urljoin(base, href)
+                content = fetch_news_content(news_url)
+                headlines.append({
+                    "新聞媒體": site_name,
+                    "新聞標題": title,
+                    "新聞內容": content,
+                    "新聞網址": news_url
+                })
         except Exception as e:
             st.error(f"{site_name} 抓取錯誤：{e}")
         return headlines
 
-# ----------------- 主畫面 -----------------
+    # =========================================================
+    # 🧱 UI：主畫面
+    # =========================================================
+    st.header("  🕴 GAI 新聞摘要")
 
-    keyword = st.text_input("請輸入要搜尋的關鍵字（例如：華碩)", value="華碩")
+    keyword = st.text_input("請輸入要搜尋的關鍵字（例如：華碩）", value="華碩")
 
     platforms = {
         "ETtoday新聞雲": {"url": "https://www.ettoday.net/news/tag/ASUS/", "tag": "h3"},
-        "聯合新聞網": {"url": "https://udn.com/search/tagging/2/ASUS", "tag": "h2"},
-        "蘋果日報": {"url": "https://tw.nextapple.com/search/asus", "tag": "h2"},
-        "中時新聞": {"url": "https://www.chinatimes.com/search/ASUS?chdtv", "tag": "h3"},
+        "聯合新聞網":   {"url": "https://udn.com/search/tagging/2/ASUS", "tag": "h2"},
+        "蘋果日報":     {"url": "https://tw.nextapple.com/search/asus", "tag": "h2"},
+        "中時新聞":     {"url": "https://www.chinatimes.com/search/ASUS?chdtv", "tag": "h3"},
     }
 
     selected_sites = st.multiselect("📍 請選擇新聞平台（可複選）", list(platforms.keys()))
 
-    if st.button("🔍 搜尋新聞") and selected_sites:
-        st.info("正在抓取新聞並分類議題，請稍候...")
-        all_results = []
-        for site_name in selected_sites:
-            site_info = platforms[site_name]
-            articles = fetch_headlines(site_info["url"], site_name, site_info["tag"], keyword)
-            for art in articles:
-                topic = classify_topic(art['新聞標題'], art['新聞內容'])
-                art['議題'] = topic
-                all_results.append(art)
-                time.sleep(1)
+    if st.button("🔍 搜尋新聞"):
+        if not selected_sites:
+            st.warning("請先選擇至少一個新聞平台。")
+        else:
+            st.info("正在抓取新聞並分類議題，請稍候…")
+            all_results = []
+            progress = st.progress(0)
+            total = len(selected_sites)
 
-        df = pd.DataFrame(all_results)
-        df = df[['議題', '新聞媒體', '新聞標題', '新聞內容', '新聞網址']]
+            for i, site_name in enumerate(selected_sites, start=1):
+                site = platforms[site_name]
+                articles = fetch_headlines(site["url"], site_name, site["tag"], keyword)
+                for art in articles:
+                    topic = classify_topic(art["新聞標題"], art["新聞內容"])
+                    art["議題"] = topic
+                    all_results.append(art)
+                    time.sleep(0.8)  # 適度節流，避免 LLM 請求過快
+                progress.progress(i / total)
 
-        # 儲存至 session_state
-        st.session_state["news_df"] = df
-        st.session_state["topics"] = sorted(df["議題"].unique().tolist())
+            if not all_results:
+                st.warning("沒有抓到符合關鍵字的新聞，請更換關鍵字或平台重試。")
+            else:
+                df = pd.DataFrame(all_results)
+                df = df[["議題", "新聞媒體", "新聞標題", "新聞內容", "新聞網址"]]
+                st.session_state["news_df"] = df
+                st.session_state["topics"] = sorted(df["議題"].unique().tolist())
+                st.success("✅ 抓取完成！下方可進行篩選與分析。")
 
-# ----------------- 分析與互動區 -----------------
+    # =========================================================
+    # 🔎 分析與互動
+    # =========================================================
     if "news_df" in st.session_state:
         df = st.session_state["news_df"]
         unique_topics = st.session_state["topics"]
 
         selected_topics = st.multiselect("🧠 請選擇篩選的議題（可複選）", unique_topics, default=unique_topics)
-        filtered_df = df[df['議題'].isin(selected_topics)]
+        filtered_df = df[df["議題"].isin(selected_topics)].copy()
 
         st.dataframe(filtered_df, use_container_width=True)
 
-# 🧱 議題分佈長條圖（極小版、可自適應）
+        # 📊 議題分佈長條圖（極小版、可自適應）
         st.markdown("### 📊 圖表分析：各議題新聞分佈")
-        topic_counts = filtered_df['議題'].value_counts()
+        if filtered_df.empty:
+            st.info("目前篩選條件下沒有資料。")
+        else:
+            topic_counts = filtered_df["議題"].value_counts()
+            fig, ax = plt.subplots(figsize=(1.5, 0.5), dpi=600)  # 更小但高畫質
+            bars = ax.bar(topic_counts.index, topic_counts.values)
 
-        fig, ax = plt.subplots(figsize=(1.5, 0.5), dpi=600)  # 更小但高畫質
-        bars = ax.bar(topic_counts.index, topic_counts.values, color='skyblue')
+            for bar in bars:
+                h = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width() / 2, h, f"{int(h)}",
+                        ha="center", va="bottom", fontsize=4)
 
-        for bar in bars:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width() / 2, height, f'{int(height)}', 
-                ha='center', va='bottom', fontsize=4)  # 數字縮小
+            ax.set_ylabel("新聞數量", fontsize=4)
+            plt.xticks(rotation=0, fontsize=4)
+            plt.yticks(fontsize=4)
 
-        ax.set_ylabel("新聞數量", fontsize=4)
-        plt.xticks(rotation=0, fontsize=4)
-        plt.yticks(fontsize=4)
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", bbox_inches="tight", dpi=600)
+            st.image(buf, use_container_width=True)
 
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", bbox_inches="tight", dpi=600)
-        st.image(buf, use_column_width=True)  # 可根據容器寬度縮放顯示
-
-    # 使用者提問
+        # 💬 使用者提問（依當前篩選結果生成脈絡）
         st.markdown("### 💬 對這些新聞內容發問")
         user_question = st.text_area("請輸入你的問題（例如：這些新聞中有哪些未來趨勢？）")
 
         if st.button("送出提問") and user_question:
-            context_text = "\n\n".join(
-                f"【{row['議題']}】{row['新聞標題']}：{row['新聞內容']}"
-                for _, row in filtered_df.iterrows()
-            )[:3000]
+            if filtered_df.empty:
+                st.warning("目前沒有可供分析的新聞內容，請先進行搜尋或調整篩選條件。")
+            else:
+                context_text = "\n\n".join(
+                    f"【{row['議題']}】{row['新聞標題']}：{row['新聞內容']}"
+                    for _, row in filtered_df.iterrows()
+                )[:3000]
 
-            full_prompt = f"以下是多則新聞內容，請根據使用者的問題給出具體回覆。\n\n使用者提問：{user_question}\n\n新聞資料：{context_text}"
-
-            try:
-                response = client.chat.completions.create(
-                    model="deepseek/deepseek-chat",
-                    messages=[
-                        {"role": "system", "content": "你是一位中文新聞分析助手，請根據提供的新聞內容與使用者問題給出清晰、簡潔、具體的中文回應。"},
-                        {"role": "user", "content": full_prompt}
-                    ],
-                    temperature=0.5,
-                    max_tokens=600
+                full_prompt = (
+                    "以下是多則新聞內容，請根據使用者的問題給出具體回覆。\n\n"
+                    f"使用者提問：{user_question}\n\n"
+                    f"新聞資料：{context_text}"
                 )
-                st.markdown("### 🤖 LLM 回覆")
-                st.write(response.choices[0].message.content.strip())
-            except Exception as e:
-                st.error(f"回覆失敗：{e}")
+
+                with st.spinner("LLM 正在產生回覆…"):
+                    try:
+                        resp = client.chat.completions.create(
+                            model="deepseek/deepseek-chat",
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "你是一位中文新聞分析助手，請根據提供的新聞內容與使用者問題給出清晰、簡潔、具體的中文回應。"
+                                },
+                                {"role": "user", "content": full_prompt}
+                            ],
+                            temperature=0.5,
+                            max_tokens=600
+                        )
+                        st.markdown("### 🤖 LLM 回覆")
+                        st.write((resp.choices[0].message.content or "").strip())
+                    except Exception as e:
+                        st.error(f"回覆失敗：{e}")
 elif page == "  📈 數據分析助手":
-    import os
-    import streamlit as st
-    import pandas as pd
-    import plotly.express as px
-    from openai import OpenAI
-
-    # 讀取 OpenRouter 金鑰（優先 st.secrets，其次環境變數）
-    OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
-    if not OPENROUTER_API_KEY:
-        st.error("找不到 OPENROUTER_API_KEY，請在 .streamlit/secrets.toml 或環境變數設定你的 OpenRouter 金鑰。")
-        st.stop()
-
-    # OpenRouter Client（HTTP header 僅使用 ASCII，避免 'ascii' codec 錯誤）
-    client = OpenAI(
-        api_key=OPENROUTER_API_KEY,
-        base_url="https://openrouter.ai/api/v1",
-        default_headers={
-            "HTTP-Referer": "http://localhost",   # 若你有對外網址，改成你的網址
-            "X-Title": "ASUS-Data-Assistant"      # 英數/破折號，避免非 ASCII
-        }
-    )
-    openai_model = "deepseek/deepseek-r1:free"
+    import os, re
+    # 這裡不需要再 import streamlit / pandas / plotly / OpenAI，
+    # 若你已在檔案上方匯入過就好。未匯入者請在檔案頂端補上。
 
     st.header("📈 數據分析助手")
+
+    # --- 讀取 OpenRouter 設定（優先 secrets，再退環境變數/預設） ---
+    OPENROUTER_API_KEY  = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+    OPENROUTER_BASE_URL = st.secrets.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    if not OPENROUTER_API_KEY:
+        st.error("找不到 OPENROUTER_API_KEY，請在 .streamlit/secrets.toml 或環境變數設定。")
+        st.stop()
+
+    default_headers = {}
+    app_url  = st.secrets.get("APP_URL")           # e.g. https://your-app.streamlit.app
+    app_name = st.secrets.get("APP_NAME")          # e.g. ASUS-Data-Assistant
+    if app_url:
+        default_headers["HTTP-Referer"] = app_url  # 保持 ASCII，避免 'ascii' codec 錯誤
+    if app_name:
+        default_headers["X-Title"] = app_name
+
+    client = OpenAI(
+        api_key=OPENROUTER_API_KEY,
+        base_url=OPENROUTER_BASE_URL,
+        default_headers=default_headers or None
+    )
+    openai_model = "deepseek/deepseek-r1:free"  # 若要避免 <think>，可改 "deepseek/deepseek-chat"
+
+    # 移除 deepseek-r1 可能回傳的 <think>... 區塊
+    def _strip_think(txt: str) -> str:
+        return re.sub(r"<think>.*?</think>", "", txt or "", flags=re.DOTALL).strip()
+
     uploaded_file = st.file_uploader("請上傳一個 CSV 檔案", type=["csv"])
 
     if uploaded_file:
-        # 讀檔（優先 UTF-8，失敗再退回預設）
+        # --- 讀檔（優先 UTF-8，失敗退回預設） ---
         try:
             df = pd.read_csv(uploaded_file, encoding="utf-8")
         except Exception:
@@ -1099,16 +1186,15 @@ elif page == "  📈 數據分析助手":
             df = pd.read_csv(uploaded_file)
 
         st.subheader("🔍 數據預覽")
-        st.dataframe(df.head())
+        st.dataframe(df.head(), use_container_width=True)
 
         st.subheader("📈 數據統計摘要")
         try:
-            st.write(df.describe(include="all"))
+            st.dataframe(df.describe(include="all"), use_container_width=True)
         except Exception:
-            st.write(df.describe())
+            st.dataframe(df.describe(), use_container_width=True)
 
         st.subheader("📊 圖表視覺化")
-        # 自動判斷欄位類型
         numeric_columns = df.select_dtypes(include="number").columns.tolist()
         non_numeric_columns = df.select_dtypes(exclude="number").columns.tolist()
 
@@ -1131,6 +1217,7 @@ elif page == "  📈 數據分析助手":
 
         if st.button("送出給 GPT 分析", key="da_btn"):
             with st.spinner("分析中..."):
+                # 只取前 10 列，避免 prompt 過長
                 df_md = df.head(10).astype(str).to_markdown(index=False)
                 prompt = f"""你是一位數據分析師，請根據以下的 DataFrame（以 markdown 表示）回答問題。
 
@@ -1140,7 +1227,7 @@ Data:
 問題：
 {user_query}
 
-請以簡潔易懂的方式回覆。"""
+請以條列、簡潔具體的方式回覆，必要時給出重點洞察與可能的下一步分析建議。"""
 
                 try:
                     resp = client.chat.completions.create(
@@ -1148,12 +1235,13 @@ Data:
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.5
                     )
-                    result = resp.choices[0].message.content
+                    raw = resp.choices[0].message.content
+                    result = _strip_think(raw)
                     st.markdown("#### 🧾 分析結果")
                     st.write(result)
                 except Exception as e:
                     st.error(f"發生錯誤：{e}")
-    
+
 elif page == "🔗 參考資料":
     st.header("🎨 進階排版與功能加強（streamlit-extras 功能介紹）")
 
