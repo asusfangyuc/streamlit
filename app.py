@@ -38,7 +38,7 @@ import io
 # 頁面基本設定
 st.set_page_config(page_title="Streamlit", layout="wide")
 
-# CSS 樣式：米色底、墨綠選單、圓角排版、簡約筆記風
+# CSS 樣式
 st.markdown("""
 <style>
 /* 🟡 背景與整體字體 */
